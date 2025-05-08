@@ -1,18 +1,24 @@
 import socket
 
 from enum import Enum
-from .helpers import NestedEnum, _bytesToMacAddress, _applyBitmask, _macAddressToBytes, _bytesToHexString
+from ..helpers import NestedEnum, _bytesToMacAddress, applyBitmask, _macAddressToBytes, bytesToHexString
+from .base.asyncdev import AsyncDevice
 
-
-class BoseDevice:
+class BoseDevice(AsyncDevice):
   PORT = 8
+  TIMEOUT = 10
   
-  def __init__(self, macAddress):
+  def __init__(self, macAddress, *, port=PORT, socket_timeout=TIMEOUT):
     self.macAddress = macAddress
+    self.port = port
   
     self.socket = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
-    self.socket.connect((self.macAddress, self.PORT))
-
+    self.socket.settimeout(socket_timeout)
+    
+  def connect(self):
+    self.socket.connect((self.macAddress, self.port))
+    self.getBmapVersion()
+  
 
   ###########################
   #  COMPOSITES/PROCEDURES  #
@@ -49,7 +55,7 @@ class BoseDevice:
   def getSupportedFunctionBlocks(self):
     self._sendCommand(self.FunctionBlock.PRODUCT_INFO, self.Function.ALL_FUNCTION_BLOCKS, self.Operator.GET)
     supportBitMask = self._parseResponse()
-    return _applyBitmask(self.FunctionBlock, supportBitMask)
+    return applyBitmask(self.FunctionBlock, supportBitMask)
   
   def getSupportedFunctionBlockVersions(self):
     self._sendCommand(self.FunctionBlock.PRODUCT_INFO, self.Function.ALL_FUNCTION_BLOCKS, self.Operator.START)
@@ -164,6 +170,31 @@ class BoseDevice:
     self._sendAndParse(self.FunctionBlock.SETTINGS, self.Function.IMU_VOLUME_CT, self.Operator.SET_GET, isEnabled)
     
     
+  ############
+  #  Status  #
+  ############
+  
+  def getEveryStatus(self):
+    self._sendCommand(self.FunctionBlock.STATUS, self.Function.ALL_STATUS, self.Operator.START)
+    return self._parseResponse(expectList=True) # TODO: correct mapping
+  
+  def getBatteryLevel(self):
+    self._sendCommand(self.FunctionBlock.STATUS, self.Function.BATTERY_LEVEL, self.Operator.GET)
+    return self._parseResponse()[0]
+  
+  def isAuxCableConnected(self):
+    self._sendCommand(self.FunctionBlock.STATUS, self.Function.AUX_CABLE, self.Operator.GET)
+    return bool(self._parseResponse()[0]) # TODO: test
+  
+  def getMicLevel(self):
+    self._sendCommand(self.FunctionBlock.STATUS, self.Function.MIC_LEVEL, self.Operator.GET)
+    return self._parseResponse()[0] # TODO: test
+  
+  def isChargerConnected(self):
+    self._sendCommand(self.FunctionBlock.STATUS, self.Function.CHARGER_DETECT, self.Operator.GET)
+    return bool(self._parseResponse()[0]) # TODO: test
+  
+    
   #####################
   #  Firmware Update  #
   #####################
@@ -177,20 +208,22 @@ class BoseDevice:
   
   def connectDevice(self, macOfOtherDevice):
     self._sendCommand(self.FunctionBlock.DEVICE_MANAGEMENT, self.Function.CONNECT_DEV, self.Operator.START, 0, *_macAddressToBytes(macOfOtherDevice))
-    return _bytesToHexString(self._parseResponse()) # TODO
+    return bytesToHexString(self._parseResponse()) # TODO
   
   def connectDeviceAndKeep(self, macOfOtherDevice, productTypeOfOtherDevice, macOfDeviceToKeep):
     b1 = ((productTypeOfOtherDevice.value << 7) | 0b10000) & 255
     self._sendCommand(self.FunctionBlock.DEVICE_MANAGEMENT, self.Function.CONNECT_DEV, self.Operator.START, b1, *_macAddressToBytes(macOfOtherDevice), *_macAddressToBytes(macOfDeviceToKeep))
     self._parseResponse() # Start
-    return _bytesToHexString(self._parseResponse())
+    return bytesToHexString(self._parseResponse())
     #return _bytesToHexString(self._parseResponse()) # TODO
   
   def disconnectDevice(self, macOfOtherDevice):
-    pass # TODO
+    self._sendCommand(self.FunctionBlock.DEVICE_MANAGEMENT, self.Function.DISCONNECT_DEV, self.Operator.START, *_macAddressToBytes(macOfOtherDevice))
+    return self._parseResponse() # TODO
   
   def removeDevice(self, macOfOtherDevice):
-    pass # TODO
+    self._sendCommand(self.FunctionBlock.DEVICE_MANAGEMENT, self.Function.REMOVE_DEV, self.Operator.START, *_macAddressToBytes(macOfOtherDevice))
+    return self._parseResponse() # TODO
   
   def listDevices(self):
     self._sendCommand(self.FunctionBlock.DEVICE_MANAGEMENT, self.Function.LIST_DEVICES, self.Operator.GET)
@@ -209,22 +242,25 @@ class BoseDevice:
     return self._parseResponse()
   
   def clearDeviceList(self):
-    pass
+    self._sendCommand(self.FunctionBlock.DEVICE_MANAGEMENT, self.Function.CLEAR_DEV_LIST, self.Operator.START)
+    return self._parseResponse() # TODO
   
   def getPairingMode(self):
-    pass
+    self._sendCommand(self.FunctionBlock.DEVICE_MANAGEMENT, self.Function.PAIRING_MODE, self.Operator.GET)
+    return bool(self._parseResponse())
   
-  def setPairingMode(self):
-    pass
+  def setPairingMode(self, enabled):
+    self._sendCommand(self.FunctionBlock.DEVICE_MANAGEMENT, self.Function.PAIRING_MODE, self.Operator.SET_GET, int(bool(enabled)))
+    return bool(self._parseResponse())
   
   def getLocalMacAddress(self):
-    pass
+    pass # TODO
 
   def prepareP2P(self):
-    pass
+    pass # TODO
   
   def getP2PMode(self):
-    pass
+    pass # 
   
   def setP2PMode(self, p2pMode):
     pass
@@ -232,6 +268,60 @@ class BoseDevice:
   def startRouting(self):
     pass
 
+
+  ######################
+  #  Audio Management  #
+  ######################
+  
+  def getSource(self):
+    self._sendCommand(self.FunctionBlock.AUDIO_MANAGEMENT, self.Function.SOURCE)
+    return self._parseResponse()  # TODO
+  
+  def getAllAudioInfo(self):
+    self._sendCommand(self.FunctionBlock.AUDIO_MANAGEMENT, self.Function.ALL_AUDIO_INFO, self.Operator.START)
+    return self._parseResponse(expectList=True)  # TODO
+  
+  def getControl(self):
+    self._sendCommand(self.FunctionBlock.AUDIO_MANAGEMENT, self.Function.CONTROL, self.Operator.GET)
+    return self._parseResponse() # TODO
+  
+  def stopSong(self):
+    return self._controlAudio(self.AudioControlMode.STOP)
+  
+  def pauseSong(self):
+    return self._controlAudio(self.AudioControlMode.PAUSE)
+  
+  def playSong(self):
+    return self._controlAudio(self.AudioControlMode.PLAY)
+  
+  def nextSong(self):
+    return self._controlAudio(self.AudioControlMode.TRACK_FORWARD)
+  
+  def previousSong(self):
+    return self._controlAudio(self.AudioControlMode.TRACK_BACK)
+  
+  def _controlAudio(self, mode):
+    self._sendCommand(self.FunctionBlock.AUDIO_MANAGEMENT, self.Function.CONTROL, self.Operator.START, mode.value)
+    return self._parseResponse(expectList=True) # TODO
+  
+  def getStatus(self):
+    self._sendCommand(self.FunctionBlock.AUDIO_MANAGEMENT, self.Function.STATUS, self.Operator.GET)
+    return self._parseResponse() # TODO
+  
+  def getVolume(self):
+    self._sendCommand(self.FunctionBlock.AUDIO_MANAGEMENT, self.Function.VOLUME, self.Operator.GET)
+    maxVolume, curVolume = self._parseResponse()
+    return curVolume, maxVolume
+  
+  def setVolume(self, volume):
+    self._sendCommand(self.FunctionBlock.AUDIO_MANAGEMENT, self.Function.VOLUME, self.Operator.SET_GET, volume)
+    maxVolume, curVolume = self._parseResponse()
+    return curVolume, maxVolume
+  
+  def getCurrentlyPlaying(self):
+    self._sendCommand(self.FunctionBlock.AUDIO_MANAGEMENT, self.Function.NOW_PLAYING, self.Operator.START)
+    return self._parseResponse(expectList=True) # TODO
+  
   
   #############
   #  Control  #
@@ -304,6 +394,12 @@ class BoseDevice:
     SIDETONE      = 0x0b
     IMU_VOLUME_CT = 0x17
     
+    ALL_STATUS     = 0x01
+    BATTERY_LEVEL  = 0x02
+    AUX_CABLE      = 0x03
+    MIC_LEVEL      = 0x04
+    CHARGER_DETECT = 0x05
+    
     CONNECT_DEV     = 0x01
     DISCONNECT_DEV  = 0x02
     REMOVE_DEV      = 0x03
@@ -316,6 +412,13 @@ class BoseDevice:
     P2P_PREPARE     = 0x0a
     P2P_MODE        = 0x0b
     P2P_ROUTING     = 0x0c
+    
+    SOURCE         = 0x01
+    ALL_AUDIO_INFO = 0x02
+    CONTROL        = 0x03
+    STATUS         = 0x04
+    VOLUME         = 0x05
+    NOW_PLAYING    = 0x06
     
     ALL_CONTROLS = 0x01
     CHIRP        = 0x02
@@ -356,7 +459,7 @@ class BoseDevice:
       self.isEnabled = bool(b1 & self.IS_ENABLED)
       self.language = self.Language(b1 & self.LANGUAGE)
       supportedLanguagesBitmask = bytes[1:]
-      self.supportedLanguages = _applyBitmask(self.Language, supportedLanguagesBitmask)
+      self.supportedLanguages = applyBitmask(self.Language, supportedLanguagesBitmask)
       
     def _getPayload(self):
       b = self.language.value & self.LANGUAGE
@@ -397,7 +500,7 @@ class BoseDevice:
       self.buttonId = bytes[0]
       self.buttonEventType = bytes[1]
       self.configuredFunctionality = self.ActionButtonModes(bytes[2])
-      self.supportedFunctionality = _applyBitmask(self.ActionButtonModes, bytes[3:])
+      self.supportedFunctionality = applyBitmask(self.ActionButtonModes, bytes[3:])
       
     def _getPayload(self):
       return bytes([self.buttonId, self.buttonEventType, self.configuredFunctionality.value])
@@ -437,6 +540,17 @@ class BoseDevice:
     TIMED_OUT = 2
     STOPPED = 3
     USER_REMOVED_BUD = 4
+    
+  class AudioControlMode(Enum):
+    STOP = 0
+    PLAY = 1
+    PAUSE = 2
+    TRACK_FORWARD = 3
+    TRACK_BACK = 4
+    FAST_FORWARD_PRESS = 5
+    FAST_FORWARD_RELEASE = 6
+    REWIND_PRESS = 7
+    REWIND_RELEASE = 8
     
     
     
@@ -494,12 +608,12 @@ class BoseDevice:
       Function.VOICE_PROMPTS: lambda x: BoseDevice.VoicePromptSetting(x),
       Function.STANDBY_TIMER: lambda x: x[0],
       Function.CNC: lambda x: (x[0], x[1]),
-      Function.ANR: lambda x: (BoseDevice.AnrLevel(x[0]), _applyBitmask(BoseDevice.AnrLevel, x[1:])),
+      Function.ANR: lambda x: (BoseDevice.AnrLevel(x[0]), applyBitmask(BoseDevice.AnrLevel, x[1:])),
       Function.BASS_CONTROL: lambda x: (x[0], x[1], x[2]),
       Function.ALERTS: lambda x: (bool(x[0] & 0b01), bool(x[0] & 0b10)),
       Function.BUTTONS: lambda x: BoseDevice.ActionButtonSetting(x),
       Function.MULTIPOINT: lambda x: (bool(x[0] & 0b10),  bool(x[0] & 0x01)), # TODO
-      Function.SIDETONE: lambda x: (x[0], BoseDevice.SidetoneLevel(x[1]), _applyBitmask(BoseDevice.SidetoneLevel, x[2:])),
+      Function.SIDETONE: lambda x: (x[0], BoseDevice.SidetoneLevel(x[1]), applyBitmask(BoseDevice.SidetoneLevel, x[2:])),
       Function.IMU_VOLUME_CT: lambda x: bool(x),
     },
     FunctionBlock.CONTROL: {

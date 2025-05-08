@@ -1,0 +1,140 @@
+class _ProductInfo_Function(_FunctionBlock.PRODUCT_INFO._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  BMAP_VERSION        = 0x01 DONE
+  ALL_FUNCTION_BLOCKS = 0x02 
+  PRODUCT_ID_VARIANT  = 0x03 DONE
+  ALL_FUNCTIONS       = 0x04 
+  FIRMWARE_VERSION    = 0x05 DONE
+  MAC_ADDRESS         = 0x06 DONE
+  SERIAL_NUMBER       = 0x07 DONE
+  HARDWARE_REVISION   = 0x0a DONE
+  COMPONENT_DEVICES   = 0x0b DONE
+  
+class _Settings_Function(_FunctionBlock.SETTINGS._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  ALL_SETTINGS  = 0x01
+  DEVICE_NAME   = 0x02 DONE [does it also support OP.SET or only GET and SET_GET]
+  VOICE_PROMPTS = 0x03 DONE
+  STANDBY_TIMER = 0x04 DONE
+  CNC           = 0x05 
+  ANR           = 0x06
+  BASS_CONTROL  = 0x07
+  ALERTS        = 0x08
+  BUTTONS       = 0x09
+  MULTIPOINT    = 0x0a
+  SIDETONE      = 0x0b
+  IMU_VOLUME_CT = 0x17
+  
+class _Status_Function(_FunctionBlock.STATUS._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  GET_ALL_FUNCTIONS   = 0x01
+  BATTERY_LEVEL       = 0x02 DONE
+  AUX_CABLE_DETECTION = 0x03 DONE
+  MIC_LEVEL           = 0x04 UNKNOWN
+  CHARGER_DETECT      = 0x05 DONE
+  
+class _FirmwareUpdate_Function(_FunctionBlock.FIRMWARE_UPDATE._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  STATE         = 0x01
+  INIT          = 0x02
+  DATA_TRANSFER = 0x03
+  SYNCHRONIZE   = 0x04
+  VAILDATE      = 0x05
+  RUN           = 0x06
+  RESET         = 0x07
+  
+class _DeviceManagement_Function(_FunctionBlock.DEVICE_MANAGEMENT._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  CONNECT           = 0x01
+  DISCONNECT        = 0x02
+  REMOVE_DEVICE     = 0x03
+  LIST_DEVICES      = 0x04
+  INFO              = 0x05
+  INFO_EXTENDED     = 0x06
+  CLEAR_DEVICE_LIST = 0x07
+  PAIRING_MODE      = 0x08
+  LOCAL_MAC_ADDRESS = 0x09
+  PREPARE_P2P       = 0x0a
+  P2P_MODE          = 0x0b
+  ROUTING           = 0x0c
+  
+class _Audio_Function(_FunctionBlock.AUDIO_MANAGEMENT._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  SOURCE         = 0x01
+  ALL_AUDIO_INFO = 0x02
+  CONTROL        = 0x03
+  STATUS         = 0x04
+  VOLUME         = 0x05 DONE
+  NOW_PLAYING    = 0x06
+  
+class _Control_Function(_FunctionBlock.CONTROL._FunctionEnum):
+  FUNTION_BLOCK_INFO = 0x00 DONE
+  GET_ALL = 0x01
+  CHIRP   = 0x02
+  
+class _Notifications_Function(_FunctionBlock.CONTROL._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  RESET             = 0x01
+  BY_FUNCTION_BLOCK = 0x02
+  BY_FUNCTION       = 0x03
+  PERIODIC          = 0x04
+  
+class _HearingAssistance_Function(_FunctionBlock.HEARING_ASSISTANCE._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  WDRC_BRIEF_UPDATE       = 0x01
+  WDRC_INDIVIDUAL_UPDATE  = 0x02
+  DIRECTIONALITY          = 0x03
+  DIRECTIONALITY_SETTINGS = 0x04
+  NR_CONTROL              = 0x05
+  NR_SETTINGS             = 0x06
+  MAPPED_SETTINGS_STANDARD_MODE = 0x07
+  WDRC_BAND_DEFINITIONS   = 0x08
+  EQ_BAND_DEFINITIONS     = 0x09
+  SUB_PROCESSOR_VERSION   = 0x0a
+  MUTING                  = 0x0b
+  BOOST_EQ                = 0x0c
+  LIMITS                  = 0x0d
+  SUB_PROCESSOR_STATUS    = 0x0e
+  MAPPED_SETTINGS_MODE    = 0x0f
+  MAPPED_SETTINGS_OFFSET_CONTROL_MODE = 0x10
+  GLOBAL_MUTE             = 0x11
+  ALGORITHM_CONTROL       = 0x12
+  LIVE_METRICS            = 0x13
+  DOFF_AUTO_OFF_TIME      = 0x14
+  
+class _DataCollection_Function(_FunctionBlock.DATA_COLLECTION._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  GET_ALL = 0x01
+  RECORDS = 0x02
+  PAUSE   = 0x03
+  CLEAR   = 0x04
+  UID     = 0x05
+  ENABLE  = 0x06
+  
+class _HeartRate_Function(_FunctionBlock.HEART_RATE._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  GET_ALL          = 0x01
+  HEART_RATE       = 0x02
+  HEART_RATE_STATS = 0x03
+  SPEED_DISTANCE   = 0x04
+  STEP_RATE_STATS  = 0x05
+  CALORIES         = 0x06
+  VO2              = 0x07
+  USER_INFO        = 0x08
+  WORKOUT_INFO     = 0x09
+  HEART_RATE_READING_RELIABILITY = 0x0a
+  OPTICAL_SENSOR_STATUS = 0x0b
+  POST_STATUS      = 0x0c
+  CALIBRATION_INFO = 0x0d
+  FIRMWARE_VERSION = 0x0e
+  HARDWARE_INFO    = 0x0f
+  
+class _VoicePersonalAssistant_Function(_FunctionBlock.VOICE_PERSONAL_ASSISTANT._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  GET_ALL        = 0x01
+  SUPPORTED_VPAS = 0x02
+  
+class _AugmentedReality_Function(_FunctionBlock.AUGMENTED_REALITY._FunctionEnum):
+  FUNCTION_BLOCK_INFO = 0x00 DONE
+  GET_ALL             = 0x01
+  AR_STREAMING_STATUS = 0x02

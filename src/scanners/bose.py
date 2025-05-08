@@ -1,8 +1,9 @@
-from devices import bose
-from devices.helpers import _bytesToMacAddress
+from ..devices import bose
+from .. import basetypes as bt
+from .base import ScannedDevice, Parser
 
-class ScannedBoseDevice:
-  def __init__(self, name, macAddress, bmapVersion, isInPairingMode, isDevice1Connected, device1MacAddress, isDevice2Connected, device2MacAddress, productType, productId, productVariant, supportsMusicShare, isInMusicShare):
+class ScannedBoseDevice(ScannedDevice):
+  def __init__(self, name, macAddress, bmapVersion, isInPairingMode, isDevice1Connected, device1MacAddress, isDevice2Connected, device2MacAddress, productType, productId, supportsMusicShare, isInMusicShare):
     self.name = name
     self.macAddress = macAddress
     self.bmapVersion = bmapVersion
@@ -13,14 +14,13 @@ class ScannedBoseDevice:
     self.device2Mac = device2MacAddress
     self.productType = productType
     self.productId = productId
-    self.productVariant = productVariant
     self.supportsMusicShare = supportsMusicShare
     self.isInMusicShare = isInMusicShare
   def __repr__(self):
-    return f"ScannedBoseDevice<name={self.name}, macAddress={self.macAddress}, isInPairingMode={self.isInPairingMode}>"
+    return f"ScannedBoseDevice<name={self.name}, macAddress={self.macAddress}, isInPairingMode={self.isInPairingMode}, product={self.productId.getFullName()}>"
 
 
-class BoseParser:
+class BoseParser(Parser):
   @classmethod
   def _getManufacturerSpecificField(cls, advertisement_data):
     mfd = advertisement_data.manufacturer_data
@@ -70,7 +70,7 @@ class BoseParser:
     return name
   
   @classmethod
-  def parse(cls, device, advertisement_data):
+  def parse(cls, device, advertisement_data, existing):
     mfs_data = cls._getManufacturerSpecificField(advertisement_data)
     if mfs_data is None:
       return
@@ -93,7 +93,7 @@ class BoseParser:
     if (not parser) or (not parser.isValid):
       return
         
-    return ScannedBoseDevice(name, macAddress, parser.bmapVersion, parser.isInPairingMode, parser.isDevice1Connected, parser.device1MacAddress, parser.isDevice2Connected, parser.device2MacAddress, parser.productType, parser.productId, parser.variantId, parser.supportsMusicShare, parser.isInMusicShare)
+    return ScannedBoseDevice(name, macAddress, parser.bmapVersion, parser.isInPairingMode, parser.isDevice1Connected, parser.device1MacAddress, parser.isDevice2Connected, parser.device2MacAddress, parser.productType, parser.productId, parser.supportsMusicShare, parser.isInMusicShare)
   
   
 class BoseMFSParser:
@@ -109,16 +109,14 @@ class BoseMFSParserLegacy(BoseMFSParser):
   LENGTH_MINIMUM = 6
   LENGTH_PER_MAC = 6
   def __init__(self, data: bytes):
-    self.isValid = True
-    
+    self.isValid = False
     if len(data) < self.LENGTH_MINIMUM:
-      self.isValid = False
       return
     
     bmv1 = self.shiftBitsMagic(data[0], 4, 4)
     bmv2 = self.shiftBitsMagic(data[0], 0, 4) << 4 + self.shiftBitsMagic(data[1], 4, 4)
     bmv3 = self.shiftBitsMagic(data[1], 0, 4)
-    self.bmapVersion = f"{bmv1}.{bmv2}.{bmv3}"
+    self.bmapVersion = bt.VersionMajorMinorPatch(bmv1, bmv2, bmv3)
     
     self.isInPairingMode = self.isBitSet(data[5], 7)
     
@@ -131,44 +129,44 @@ class BoseMFSParserLegacy(BoseMFSParser):
     if self.isDevice2Connected:
       expectedLength += self.LENGTH_PER_MAC
     if len(data) != expectedLength:
-      self.isValid = False
       return
     
     self.device1MacAddress = None
     self.device2MacAddress = None
     macPos = 6
     if self.isDevice1Connected:
-      self.device1MacAddress = _bytesToMacAddress(data[macPos:macPos+6])
+      self.device1MacAddress = bt.MacAddress(*data[macPos:macPos+6])
       macPos += 6
     if self.isDevice2Connected:
-      self.device2MacAddress = _bytesToMacAddress(data[macPos:macPos+6])
+      self.device2MacAddress = bt.MacAddress(*data[macPos:macPos+6])
     
-    self.productId = (data[2] << 8) | data[3]
-    self.variantId = data[4]
+    productId = (data[2] << 8) | data[3]
+    variantId = data[4]
+    self.productId = bose.types._BoseProduct._getBestFitByBytes(productId, variantId)
     
     self.supportsMusicShare = self.isBitSet(data[5], 4) # TODO: also apparently it does not support music sharing, when bmap < 1.0.2
     self.isInMusicShare = self.isBitSet(data[5], 2) or self.isBitSet(data[5], 3)
     
     self.productType = None
     if self.isBitSet(data[5], 5):
-      self.productType = bose.BoseDevice.PairedDevice.ProductType.HEADPHONES
+      self.productType = bose.types.PairedDevice.ProductType.HEADPHONES
     else:
-      self.productType = bose.BoseDevice.PairedDevice.ProductType.SPEAKER
+      self.productType = bose.types.PairedDevice.ProductType.SPEAKER
+      
+    self.isValid = True
 
 class BoseMFSParser104(BoseMFSParser):
   LENGTH_MINIMUM = 9
   LENGTH_PER_MAC = 3
   def __init__(self, data: bytes):
-    self.isValid = True
+    self.isValid = False
     if len(data) < self.LENGTH_MINIMUM:
-      self.isValid = False
       return
     
     if data[0] not in [0x00, 0x01]:
-      self.isValid = False
       return
     
-    self.bmapVersion = "1.0.4"
+    self.bmapVersion = bt.VersionMajorMinorPatch(1, 0, 4)
     
     self.isDevice1Connected = self.isBitSet(data[2], 4)
     self.isDevice2Connected = self.isBitSet(data[2], 5)
@@ -179,33 +177,77 @@ class BoseMFSParser104(BoseMFSParser):
     if self.isDevice2Connected:
       expectedLength += self.LENGTH_PER_MAC
     if len(data) != expectedLength:
-      self.isValid = False
       return
     
     self.device1MacAddress = None
     self.device2MacAddress = None
     macPos = 9
     if self.isDevice1Connected:
-      self.device1MacAddress = _bytesToMacAddress(bytes(3*b"\x00"+data[macPos:macPos+3]))
+      self.device1MacAddress = bt.MacAddress(0, 0, 0, *data[macPos:macPos+3])
       macPos += self.LENGTH_PER_MAC
     if self.isDevice2Connected:
-      self.device2MacAddress = _bytesToMacAddress(bytes(3*b"\x00"+data[macPos:macPos+3]))
+      self.device2MacAddress = bt.MacAddress(0, 0, 0, *data[macPos:macPos+3])
     
     self.isInPairingMode = self.isBitSet(data[2], 7)
     
     self.productType = None
     if self.isBitSet(data[3], 2):
-      self.productType = bose.BoseDevice.PairedDevice.ProductType.HEADPHONES
+      self.productType = bose.types.PairedDevice.ProductType.HEADPHONES
     else:
-      self.productType = bose.BoseDevice.PairedDevice.ProductType.SPEAKER
+      self.productType = bose.types.PairedDevice.ProductType.SPEAKER
     
     bleProductId = data[1]
-    self.productId = bleProductId # TODO: some magic to convert to actual product id
-    self.variantId = self.shiftBitsMagic(data[2], 0, 4)
+    variantId = self.shiftBitsMagic(data[2], 0, 4)
+    self.productId = bose.types._BoseProduct._getBestFitByBytes(bleProductId, variantId, useBleId=True)
     
     self.isInMusicShare = self.isBitSet(data[3], 0)
     self.supportsMusicShare = self.isBitSet(data[3], 1)
+    
+    self.isValid = True
 
 class BoseMFSParser120(BoseMFSParser):
-  def __init__(self, data: bytes): # TODO
-    pass
+  _BLE_120_FORMAT_VERSIONS = {0: 100}
+  _BLE_120_FORMAT_VERSION_DEFAULT = _BLE_120_FORMAT_VERSIONS[0]
+  LENGTH_MINIMUM = 9
+  LENGTH_PER_MAC = 3
+  
+  def __init__(self, data: bytes):
+    self.isValid = False
+    if len(data) < self.LENGTH_MINIMUM:
+      return
+    
+    self.bmapVersion = bt.VersionMajorMinorPatch(1, 2, 0)
+    
+    self.isDevice1Connected = False
+    self.isDevice2Connected = False
+    
+    expectedLength = self.LENGTH_MINIMUM
+    if self.isDevice1Connected:
+      expectedLength += self.LENGTH_PER_MAC
+    if self.isDevice2Connected:
+      expectedLength += self.LENGTH_PER_MAC
+    if len(data) != expectedLength:
+      return
+    
+    self.device1MacAddress = None
+    self.device2MacAddress = None
+    macPos = 9
+    if self.isDevice1Connected:
+      self.device1MacAddress = bt.MacAddress(0, 0, 0, *data[macPos:macPos+3])
+      macPos += self.LENGTH_PER_MAC
+    if self.isDevice2Connected:
+      self.device2MacAddress = bt.MacAddress(0, 0, 0, *data[macPos:macPos+3])
+    
+    self.isInPairingMode = self.isBitSet(data[4], 3)
+    
+    self.productType = bose.types.PairedDevice.ProductType.HEADPHONES
+    
+    advertisingFormat = data[2]
+    bleProductId = self.shiftBitsMagic(data[3], 0, 5) + self._BLE_120_FORMAT_VERSIONS.get(advertisingFormat, self._BLE_120_FORMAT_VERSION_DEFAULT)
+    variantId = self.shiftBitsMagic(data[3], 5, 3)
+    self.productId = bose.types._BoseProduct._getBestFitByBytes(bleProductId, variantId, useBleId=True)
+    
+    self.isInMusicShare = False
+    self.supportsMusicShare = False
+    
+    self.isValid = True

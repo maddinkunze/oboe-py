@@ -1,38 +1,44 @@
-import asyncio
-try:
-  import bleak
-except ModuleNotFoundError:
-  bleak = None
-  
+import typing
+from ..libraries import asyncio, bleak
+from .base import Parser
+
 from .bose import BoseParser
 
 from enum import Enum
 
 class Parsers(Enum):
+  def __init__(self, *args, **kwargs):
+    self.value: typing.Type[Parser]
+    super().__init__(*args, **kwargs)
+    
   BOSE = BoseParser
 
-_default_scan_time = 10
-_default_scan_parsers = {p for p in Parsers}
 
-async def scan(time=_default_scan_time, parsers=_default_scan_parsers):
+_DEFAULT_SCAN_TIME = 10
+_DEFAULT_SCAN_PARSERS: set[Parsers] = {p for p in Parsers}
+
+async def scan(time=_DEFAULT_SCAN_TIME, parsers: typing.Iterable[Parsers]=_DEFAULT_SCAN_PARSERS):
   stop_event = asyncio.Event()
-  devices = []
+  
+  devices = {}
   def callback(device, advertising_data):
+    macAddr = device.address
+    
     for parser in parsers:
-      parsed_device = parser.value.parse(device, advertising_data)
+      existing = devices.get(macAddr, None)
+      parsed_device = parser.value.parse(device, advertising_data, existing)
 
       if not parsed_device:
         continue
-      
-      print(parsed_device.isInMusicShare)
-      stop_event.set()
 
-      devices.append(parsed_device)
+      devices[macAddr] = (parsed_device, device)
       
   async with bleak.BleakScanner(callback):
-    #await asyncio.sleep(time)
-    await stop_event.wait()
+    await asyncio.sleep(time)
+    #await stop_event.wait()
+    
+  return devices
   
 
-def wait_for_scan(time=_default_scan_time, parsers=_default_scan_parsers):
+def wait_for_scan(time=_DEFAULT_SCAN_TIME, parsers=_DEFAULT_SCAN_PARSERS):
   return asyncio.run(scan(time, parsers))
